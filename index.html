@@ -1,0 +1,161 @@
+<head>
+    <title>arcade_results</title>
+    <style>
+        body {
+            margin: 30px;
+        }
+        button{
+
+        }
+        table {
+            margin-bottom: 30px;
+            border-collapse: collapse;
+            width: 500px;
+        }
+        th {
+            background-color: antiquewhite;
+            align-content: center;
+            padding: 10px;
+            margin-left: 1px;
+            border: 2px solid black;
+            font-family: Georgia;
+            font-size: 30px;
+        }
+        td {
+            align-content: center;
+            border: 2px solid black;
+            font-family: Arial;
+            font-size: 20px;
+        }
+
+        form {
+            width: 150px;
+        }
+
+        input {
+            display: block;
+            width: 150px;
+            margin-top: 8px;
+            border-color: black;
+            border-radius: 5px;
+        }
+
+        input[type="submit"] {
+            background-color: antiquewhite;
+            border-color: grey;
+            border-radius: 8px;
+            margin-top: 10px;
+            width: auto;
+            alignment: center;
+            margin-left: 25%;
+        }
+    </style>
+</head>
+<body>
+<script>
+    const DB_URL = "http://localhost:12321/arcade_results";
+    const TABLE_NAME = "arcade_results";
+    const COLUMNS = {
+        "nickname": "TEXT",
+        "team": "TEXT",
+        "score": "INTEGER",
+        "time": "INTEGER"
+    };
+
+    function request(operation, vars = Object.create(null)) {
+        let xhr = new XMLHttpRequest();
+        return new Promise(function (resolve) {
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState === 4) {
+                    if (xhr.status === 200) { resolve(xhr); }
+                }
+            }
+            xhr.open("POST", DB_URL, true);
+            xhr.setRequestHeader("Content-Type", "application/json");
+            xhr.send(JSON.stringify({
+                "transaction": (function () {
+                    if (operation.includes("SELECT")) return [{"query": operation}];
+                    else return [{"statement": operation, "values": vars}];
+                })()
+            }));
+        })
+    }
+
+    function get_body(data) {
+        const table = document.createElement("table");
+        const tr_header = document.createElement("tr");
+        const ths = Object.keys(COLUMNS).map(function (column) {
+            const th = document.createElement("th");
+            th.innerText = column;
+            return th;
+        });
+        ths.forEach(function (th) {
+            tr_header.append(th)
+        });
+        table.append(tr_header);
+        const trs = data.map(function (row) {
+            const tr = document.createElement("tr");
+            const tds = Object.keys(COLUMNS).map(function (column) {
+                const td = document.createElement("td");
+                td.innerText = row[column];
+                return td;
+            });
+            tds.forEach(function (td) {
+                tr.append(td)
+            });
+            return tr;
+        });
+        trs.forEach(function (tr) {
+            table.append(tr);
+        });
+        return table;
+    }
+
+    function get_submitter() {
+        const form = document.createElement("form");
+        form.onsubmit = function (event) {
+            event.preventDefault();
+            const inputs = Object.fromEntries((new FormData(event.target)).entries());
+
+            const insert_query = `
+                INSERT INTO ${TABLE_NAME} (${Object.keys(inputs).join(", ")})
+                VALUES (${Object.keys(inputs).map(function (key) {
+                return ":" + key
+            }).join(", ")})
+    `;
+            request(insert_query, inputs).then(() => {
+                location.reload();
+            });
+        };
+
+        Object.keys(COLUMNS).forEach(function (column) {
+            const input = document.createElement("input");
+            input.placeholder = column;
+            input.setAttribute("name", column);
+            form.append(input);
+        });
+
+        const submitter = document.createElement("input");
+        submitter.innerText = "Создать новую запись";
+        submitter.setAttribute("type", "submit");
+        form.append(submitter);
+
+        return form;
+    }
+
+    const columns_strings_list = Object.keys(COLUMNS).map(
+        function (key) { return key + " " + COLUMNS[key]; }
+    );
+    const table_creation_query = `CREATE TABLE IF NOT EXISTS ${TABLE_NAME} (${columns_strings_list.join(", ")})`;
+    request(table_creation_query)
+        .then(null);
+
+    request(`SELECT * FROM ${TABLE_NAME}`)
+        .then(result => {
+            const response = JSON.parse(result.response);
+            const rows = response["results"][0]["resultSet"];
+            document.body.append(get_body(rows));
+            document.body.append(get_submitter());
+        });
+</script>
+</body>
